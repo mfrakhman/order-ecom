@@ -1,20 +1,19 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { OrdersRepository } from './repositories/orders.repository';
 import { DataSource, DeepPartial } from 'typeorm';
 import { CreateOrderDto } from './dtos/create-order.dto';
 import { OrderStatus } from './entities/order.entity';
 import { OrderItem } from 'src/order-items/entities/order-item.entity';
-import { ClientProxy } from '@nestjs/microservices';
 import { OrderCreatedEvent } from './events/order-created.event';
 import { Order } from './entities/order.entity';
+import { RabbitmqService } from '../rabbitmq/rabbitmq.service';
 
 @Injectable()
 export class OrdersService {
   constructor(
     private readonly ordersRepository: OrdersRepository,
     private dataSource: DataSource,
-    @Inject('RABBITMQ_ORDER_PUBLISHER')
-    private readonly client: ClientProxy,
+    private readonly rabbitmqService: RabbitmqService,
   ) {}
 
   async createOrder(dto: CreateOrderDto) {
@@ -37,7 +36,9 @@ export class OrdersService {
           quantity: item.quantity,
         })),
       );
-      this.client.emit('order.created', event);
+      console.log('[order.created] publishing', event);
+      await this.rabbitmqService.publish('order.created', event);
+      console.log('[order.created] published', savedOrder.id);
 
       return savedOrder;
     });
