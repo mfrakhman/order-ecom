@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { OrdersRepository } from './repositories/orders.repository';
 import { DataSource, DeepPartial } from 'typeorm';
 import { CreateOrderDto } from './dtos/create-order.dto';
@@ -10,6 +10,8 @@ import { RabbitmqService } from '../rabbitmq/rabbitmq.service';
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     private readonly ordersRepository: OrdersRepository,
     private dataSource: DataSource,
@@ -36,9 +38,11 @@ export class OrdersService {
           quantity: item.quantity,
         })),
       );
-      console.log('[order.created] publishing', event);
+      this.logger.log(
+        `[order.created] publishing orderId=${savedOrder.id} items=${savedOrder.items.length}`,
+      );
       await this.rabbitmqService.publish('order.created', event);
-      console.log('[order.created] published', savedOrder.id);
+      this.logger.log(`[order.created] published orderId=${savedOrder.id}`);
 
       return savedOrder;
     });
@@ -46,6 +50,13 @@ export class OrdersService {
 
   async markFailed(orderId: string, reason: string) {
     const affected = await this.ordersRepository.markAsFailed(orderId);
-    console.log(`[order.failed] ${orderId} ${reason} affected=${affected}`);
+    this.logger.warn(
+      `[order.failed] orderId=${orderId} reason="${reason}" affected=${affected}`,
+    );
+  }
+
+  async markCompleted(orderId: string) {
+    const affected = await this.ordersRepository.markAsCompleted(orderId);
+    this.logger.log(`[order.completed] orderId=${orderId} affected=${affected}`);
   }
 }

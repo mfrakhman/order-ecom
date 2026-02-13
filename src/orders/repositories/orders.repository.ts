@@ -30,4 +30,14 @@ export class OrdersRepository {
       .execute();
     return result.affected ?? 0;
   }
+
+  async markAsCompleted(id: string): Promise<number> {
+    const result = await this.ordersRepository
+      .createQueryBuilder()
+      .update(Order)
+      .set({ status: OrderStatus.COMPLETED })
+      .where('id = :id', { id })
+      .execute();
+    return result.affected ?? 0;
+  }
 }

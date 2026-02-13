@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import * as amqplib from 'amqplib';
 import { OrdersService } from 'src/orders/orders.service';
 import { OrderStockFailedEvent } from 'src/orders/events/order-stock-failed.event';
+import { OrderStockReservedEvent } from 'src/orders/events/order-stock-reserved.event';
 
 @Injectable()
 export class RabbitmqConsumer implements OnModuleInit, OnModuleDestroy {
@@ -39,20 +40,31 @@ export class RabbitmqConsumer implements OnModuleInit, OnModuleDestroy {
     await this.channel.assertExchange(exchange, exchangeType, { durable: true });
     await this.channel.assertQueue(queue, { durable: true });
     await this.channel.bindQueue(queue, exchange, 'order.stock_failed');
+    await this.channel.bindQueue(queue, exchange, 'order.stock_reserved');
 
     this.logger.log('[RabbitMQ] consumer ready');
 
     await this.channel.consume(queue, async (msg) => {
       if (!msg) return;
       try {
-        const payload = JSON.parse(
-          msg.content.toString(),
-        ) as OrderStockFailedEvent;
-        await this.ordersService.markFailed(payload.orderId, payload.reason);
+        const routingKey = msg.fields.routingKey;
+        if (routingKey === 'order.stock_failed') {
+          const payload = JSON.parse(
+            msg.content.toString(),
+          ) as OrderStockFailedEvent;
+          await this.ordersService.markFailed(payload.orderId, payload.reason);
+        } else if (routingKey === 'order.stock_reserved') {
+          const payload = JSON.parse(
+            msg.content.toString(),
+          ) as OrderStockReservedEvent;
+          await this.ordersService.markCompleted(payload.orderId);
+        } else {
+          this.logger.warn(`Unhandled routing key: ${routingKey}`);
+        }
         this.channel?.ack(msg);
       } catch (error) {
         const err = error as Error;
-        this.logger.error('Failed to process order.stock_failed', err.stack);
+        this.logger.error('Failed to process order status event', err.stack);
         this.channel?.nack(msg, false, false);
       }
     });
