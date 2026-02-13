@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Order } from '../entities/order.entity';
+import { Order, OrderStatus } from '../entities/order.entity';
 import { DeepPartial, EntityManager, Repository } from 'typeorm';
 
 @Injectable()
@@ -19,5 +19,15 @@ export class OrdersRepository {
       return await manager.save(Order, order);
     }
     return await this.ordersRepository.save(order);
+  }
+
+  async markAsFailed(id: string): Promise<number> {
+    const result = await this.ordersRepository
+      .createQueryBuilder()
+      .update(Order)
+      .set({ status: OrderStatus.FAILED })
+      .where('id = :id', { id })
+      .execute();
+    return result.affected ?? 0;
   }
 }

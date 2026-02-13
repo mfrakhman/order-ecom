@@ -5,10 +5,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Order } from './entities/order.entity';
 import { OrdersRepository } from './repositories/orders.repository';
 import { RabbitmqModule } from 'src/rabbitmq/rabbitmq.module';
+import { RabbitmqConsumer } from 'src/rabbitmq/rabbitmq.consumer';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Order]), RabbitmqModule],
-  providers: [OrdersService, OrdersRepository],
+  providers: [OrdersService, OrdersRepository, RabbitmqConsumer],
   controllers: [OrdersController],
 })
 export class OrdersModule {}

@@ -9,7 +9,7 @@ import { OrderItem } from '../../order-items/entities/order-item.entity';
 
 export enum OrderStatus {
   PENDING = 'PENDING',
-  FAILLED = 'FAILED',
+  FAILED = 'FAILED',
   COMPLETED = 'COMPLETED',
 }
 

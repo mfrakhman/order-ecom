@@ -43,4 +43,9 @@ export class OrdersService {
       return savedOrder;
     });
   }
+
+  async markFailed(orderId: string, reason: string) {
+    const affected = await this.ordersRepository.markAsFailed(orderId);
+    console.log(`[order.failed] ${orderId} ${reason} affected=${affected}`);
+  }
 }
