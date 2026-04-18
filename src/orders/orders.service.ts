@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { OrdersRepository } from './repositories/orders.repository';
 import { DataSource, DeepPartial } from 'typeorm';
 import { CreateOrderDto } from './dtos/create-order.dto';
@@ -18,14 +18,16 @@ export class OrdersService {
     private readonly rabbitmqService: RabbitmqService,
   ) {}
 
-  async createOrder(dto: CreateOrderDto) {
+  async createOrder(dto: CreateOrderDto, userId: string) {
     let savedOrder: Order;
     return this.dataSource.transaction(async (manager) => {
       const order = this.ordersRepository.createOrder({
+        userId,
         status: OrderStatus.PENDING,
         items: dto.items.map((item) => ({
           skuId: item.skuId,
           quantity: item.quantity,
+          price: item.price,
         })),
       });
 
@@ -46,6 +48,20 @@ export class OrdersService {
 
       return savedOrder;
     });
+  }
+
+  async getOrders() {
+    return this.ordersRepository.findAll();
+  }
+
+  async getOrder(id: string) {
+    const order = await this.ordersRepository.findById(id);
+    if (!order) throw new NotFoundException(`Order ${id} not found`);
+    return order;
+  }
+
+  async getOrdersByUser(userId: string) {
+    return this.ordersRepository.findByUserId(userId);
   }
 
   async markFailed(orderId: string, reason: string) {

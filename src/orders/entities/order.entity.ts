@@ -16,20 +16,23 @@ export enum OrderStatus {
 @Entity()
 export class Order {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
+
+  @Column()
+  userId!: string;
 
   @Column({
     type: 'enum',
     enum: OrderStatus,
     default: OrderStatus.PENDING,
   })
-  status: OrderStatus;
+  status!: OrderStatus;
 
   @OneToMany(() => OrderItem, (item) => item.order, {
     cascade: true,
   })
-  items: OrderItem[];
+  items!: OrderItem[];
 
   @CreateDateColumn()
-  createdAt: Date;
+  createdAt!: Date;
 }

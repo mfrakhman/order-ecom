@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//d/product-micro/auth-service/src/**)",
+      "Read(//d/product-micro/**)",
+      "Bash(mkdir -p D:/product-micro/gateway/.github/workflows)",
+      "Bash(mkdir -p D:/product-micro/product-service/.github/workflows)"
+    ]
+  }
+}

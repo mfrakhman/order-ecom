@@ -21,6 +21,18 @@ export class OrdersRepository {
     return await this.ordersRepository.save(order);
   }
 
+  async findAll(): Promise<Order[]> {
+    return this.ordersRepository.find({ relations: ['items'] });
+  }
+
+  async findById(id: string): Promise<Order | null> {
+    return this.ordersRepository.findOne({ where: { id }, relations: ['items'] });
+  }
+
+  async findByUserId(userId: string): Promise<Order[]> {
+    return this.ordersRepository.find({ where: { userId }, relations: ['items'] });
+  }
+
   async markAsFailed(id: string): Promise<number> {
     const result = await this.ordersRepository
       .createQueryBuilder()

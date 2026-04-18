@@ -10,15 +10,18 @@ import { Order } from '../../orders/entities/order.entity';
 @Entity()
 export class OrderItem {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   @Column()
-  skuId: string;
+  skuId!: string;
 
   @Column()
-  quantity: number;
+  quantity!: number;
+
+  @Column('decimal', { precision: 12, scale: 2 })
+  price!: number;
 
   @ManyToOne(() => Order, (order) => order.items)
   @JoinColumn({ name: 'orderId' })
-  order: Order;
+  order!: Order;
 }
