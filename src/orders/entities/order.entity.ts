@@ -8,6 +8,7 @@ import {
 import { OrderItem } from '../../order-items/entities/order-item.entity';
 
 export enum OrderStatus {
+  CART = 'CART',
   PENDING = 'PENDING',
   FAILED = 'FAILED',
   COMPLETED = 'COMPLETED',

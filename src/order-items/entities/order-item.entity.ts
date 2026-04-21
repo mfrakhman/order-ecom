@@ -18,11 +18,11 @@ export class OrderItem {
   @Column()
   quantity!: number;
 
-  @Column('decimal', { precision: 12, scale: 2, transformer: {
-    to: (v: number) => v,
-    from: (v: string) => parseFloat(v),
+  @Column('decimal', { precision: 12, scale: 2, nullable: true, transformer: {
+    to: (v: number | null) => v,
+    from: (v: string | null) => (v !== null && v !== undefined) ? parseFloat(v) : null,
   }})
-  price!: number;
+  price!: number | null;
 
   @ManyToOne(() => Order, (order) => order.items)
   @JoinColumn({ name: 'orderId' })

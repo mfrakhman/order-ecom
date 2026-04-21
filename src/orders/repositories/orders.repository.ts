@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Order, OrderStatus } from '../entities/order.entity';
-import { DeepPartial, EntityManager, Repository } from 'typeorm';
+import { DeepPartial, EntityManager, Not, Repository } from 'typeorm';
 
 @Injectable()
 export class OrdersRepository {
@@ -15,9 +15,7 @@ export class OrdersRepository {
   }
 
   async saveOrder(order: Order, manager?: EntityManager): Promise<Order> {
-    if (manager) {
-      return await manager.save(Order, order);
-    }
+    if (manager) return await manager.save(Order, order);
     return await this.ordersRepository.save(order);
   }
 
@@ -30,7 +28,22 @@ export class OrdersRepository {
   }
 
   async findByUserId(userId: string): Promise<Order[]> {
-    return this.ordersRepository.find({ where: { userId }, relations: ['items'] });
+    return this.ordersRepository.find({
+      where: { userId, status: Not(OrderStatus.CART) },
+      relations: ['items'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async findCartByUserId(userId: string): Promise<Order | null> {
+    return this.ordersRepository.findOne({
+      where: { userId, status: OrderStatus.CART },
+      relations: ['items'],
+    });
+  }
+
+  async updateStatus(id: string, status: OrderStatus): Promise<void> {
+    await this.ordersRepository.update(id, { status });
   }
 
   async markAsFailed(id: string): Promise<number> {
