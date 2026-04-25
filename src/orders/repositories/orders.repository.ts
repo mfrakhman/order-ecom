@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Order, OrderStatus } from '../entities/order.entity';
+import { Order, OrderStatus, PaymentStatus } from '../entities/order.entity';
 import { DeepPartial, EntityManager, Not, Repository } from 'typeorm';
 
 @Injectable()
@@ -46,11 +46,11 @@ export class OrdersRepository {
     await this.ordersRepository.update(id, { status });
   }
 
-  async markAsFailed(id: string): Promise<number> {
+  async markAsCancelled(id: string): Promise<number> {
     const result = await this.ordersRepository
       .createQueryBuilder()
       .update(Order)
-      .set({ status: OrderStatus.FAILED })
+      .set({ status: OrderStatus.CANCELLED })
       .where('id = :id', { id })
       .execute();
     return result.affected ?? 0;
@@ -60,9 +60,17 @@ export class OrdersRepository {
     const result = await this.ordersRepository
       .createQueryBuilder()
       .update(Order)
-      .set({ status: OrderStatus.COMPLETED })
+      .set({ status: OrderStatus.COMPLETED, paymentStatus: PaymentStatus.PAID })
       .where('id = :id', { id })
       .execute();
     return result.affected ?? 0;
+  }
+
+  async setPaymentStatus(id: string, paymentStatus: PaymentStatus): Promise<void> {
+    await this.ordersRepository.update(id, { paymentStatus });
+  }
+
+  async setQrData(id: string, qrString: string, qrExpiresAt: Date): Promise<void> {
+    await this.ordersRepository.update(id, { qrString, qrExpiresAt, paymentStatus: PaymentStatus.AWAITING });
   }
 }

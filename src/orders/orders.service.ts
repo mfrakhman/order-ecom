@@ -2,9 +2,10 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { OrdersRepository } from './repositories/orders.repository';
 import { DataSource } from 'typeorm';
 import { CreateOrderDto } from './dtos/create-order.dto';
-import { Order, OrderStatus } from './entities/order.entity';
+import { Order, OrderStatus, PaymentStatus } from './entities/order.entity';
 import { OrderItem } from 'src/order-items/entities/order-item.entity';
 import { OrderCreatedEvent } from './events/order-created.event';
+import { OrderAwaitingPaymentEvent } from './events/order-awaiting-payment.event';
 import { RabbitmqService } from '../rabbitmq/rabbitmq.service';
 
 @Injectable()
@@ -18,7 +19,6 @@ export class OrdersService {
   ) {}
 
   async createOrder(dto: CreateOrderDto, userId: string) {
-    let savedOrder: Order;
     return this.dataSource.transaction(async (manager) => {
       const order = this.ordersRepository.createOrder({
         userId,
@@ -29,14 +29,12 @@ export class OrdersService {
           price: item.price,
         })),
       });
-      savedOrder = await this.ordersRepository.saveOrder(order, manager);
+      const savedOrder = await this.ordersRepository.saveOrder(order, manager);
       const event = new OrderCreatedEvent(
         savedOrder.id,
         savedOrder.items.map((item: OrderItem) => ({ skuId: item.skuId, quantity: item.quantity })),
       );
-      this.logger.log(`[order.created] publishing orderId=${savedOrder.id} items=${savedOrder.items.length}`);
       await this.rabbitmqService.publish('order.created', event);
-      this.logger.log(`[order.created] published orderId=${savedOrder.id}`);
       return savedOrder;
     });
   }
@@ -55,14 +53,56 @@ export class OrdersService {
     return this.ordersRepository.findByUserId(userId);
   }
 
-  async markFailed(orderId: string, reason: string) {
-    const affected = await this.ordersRepository.markAsFailed(orderId);
-    this.logger.warn(`[order.failed] orderId=${orderId} reason="${reason}" affected=${affected}`);
+  async markCancelled(orderId: string, reason: string) {
+    const affected = await this.ordersRepository.markAsCancelled(orderId);
+    this.logger.warn(`[order.cancelled] orderId=${orderId} reason="${reason}" affected=${affected}`);
   }
 
   async markCompleted(orderId: string) {
     const affected = await this.ordersRepository.markAsCompleted(orderId);
     this.logger.log(`[order.completed] orderId=${orderId} affected=${affected}`);
+  }
+
+  async markAwaitingPayment(orderId: string) {
+    const order = await this.ordersRepository.findById(orderId);
+    if (!order) {
+      this.logger.warn(`[order.awaiting_payment] order not found orderId=${orderId}`);
+      return;
+    }
+    await this.ordersRepository.setPaymentStatus(orderId, PaymentStatus.AWAITING);
+    const amount = order.items.reduce((sum, item) => sum + (item.price ?? 0) * item.quantity, 0);
+    const event = new OrderAwaitingPaymentEvent(
+      orderId,
+      order.userId,
+      amount,
+      order.items.map(item => ({
+        skuId: item.skuId,
+        quantity: item.quantity,
+        price: item.price ?? 0,
+      })),
+    );
+    await this.rabbitmqService.publish('order.awaiting_payment', event);
+    this.logger.log(`[order.awaiting_payment] published orderId=${orderId} amount=${amount}`);
+  }
+
+  async onQrReady(orderId: string, qrString: string, expiresAt: Date) {
+    await this.ordersRepository.setQrData(orderId, qrString, expiresAt);
+    this.logger.log(`[payment.qr_ready] QR stored for orderId=${orderId}`);
+  }
+
+  async onPaymentConfirmed(orderId: string) {
+    await this.ordersRepository.markAsCompleted(orderId);
+    this.logger.log(`[payment.confirmed] orderId=${orderId} marked COMPLETED`);
+  }
+
+  async onPaymentExpired(orderId: string) {
+    await this.ordersRepository.setPaymentStatus(orderId, PaymentStatus.EXPIRED);
+    this.logger.log(`[payment.expired] orderId=${orderId} marked EXPIRED`);
+  }
+
+  async onPaymentFailed(orderId: string) {
+    await this.ordersRepository.setPaymentStatus(orderId, PaymentStatus.FAILED);
+    this.logger.log(`[payment.failed] orderId=${orderId} marked FAILED`);
   }
 
   // Cart methods
@@ -135,7 +175,6 @@ export class OrdersService {
       order.id,
       order.items.map(item => ({ skuId: item.skuId, quantity: item.quantity })),
     );
-    this.logger.log(`[order.created] publishing orderId=${order.id} items=${order.items.length}`);
     await this.rabbitmqService.publish('order.created', event);
     return order;
   }
