@@ -70,6 +70,10 @@ export class OrdersRepository {
     await this.ordersRepository.update(id, { paymentStatus });
   }
 
+  async cancelWithPaymentStatus(id: string, paymentStatus: PaymentStatus): Promise<void> {
+    await this.ordersRepository.update(id, { status: OrderStatus.CANCELLED, paymentStatus });
+  }
+
   async setQrData(id: string, qrString: string, qrImageUrl: string, qrExpiresAt: Date): Promise<void> {
     await this.ordersRepository.update(id, { qrString, qrImageUrl, qrExpiresAt, paymentStatus: PaymentStatus.AWAITING });
   }

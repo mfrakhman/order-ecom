@@ -96,13 +96,13 @@ export class OrdersService {
   }
 
   async onPaymentExpired(orderId: string) {
-    await this.ordersRepository.setPaymentStatus(orderId, PaymentStatus.EXPIRED);
-    this.logger.log(`[payment.expired] orderId=${orderId} marked EXPIRED`);
+    await this.ordersRepository.cancelWithPaymentStatus(orderId, PaymentStatus.EXPIRED);
+    this.logger.log(`[payment.expired] orderId=${orderId} marked CANCELLED/EXPIRED`);
   }
 
   async onPaymentFailed(orderId: string) {
-    await this.ordersRepository.setPaymentStatus(orderId, PaymentStatus.FAILED);
-    this.logger.log(`[payment.failed] orderId=${orderId} marked FAILED`);
+    await this.ordersRepository.cancelWithPaymentStatus(orderId, PaymentStatus.FAILED);
+    this.logger.log(`[payment.failed] orderId=${orderId} marked CANCELLED/FAILED`);
   }
 
   // Cart methods
