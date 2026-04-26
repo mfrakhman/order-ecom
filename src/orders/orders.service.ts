@@ -85,8 +85,8 @@ export class OrdersService {
     this.logger.log(`[order.awaiting_payment] published orderId=${orderId} amount=${amount}`);
   }
 
-  async onQrReady(orderId: string, qrString: string, expiresAt: Date) {
-    await this.ordersRepository.setQrData(orderId, qrString, expiresAt);
+  async onQrReady(orderId: string, qrString: string, qrImageUrl: string, expiresAt: Date) {
+    await this.ordersRepository.setQrData(orderId, qrString, qrImageUrl, expiresAt);
     this.logger.log(`[payment.qr_ready] QR stored for orderId=${orderId}`);
   }
 

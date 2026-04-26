@@ -38,6 +38,9 @@ export class Order {
   @Column({ type: 'text', nullable: true, default: null })
   qrString!: string | null;
 
+  @Column({ type: 'text', nullable: true, default: null })
+  qrImageUrl!: string | null;
+
   @Column({ type: 'timestamp', nullable: true, default: null })
   qrExpiresAt!: Date | null;
 

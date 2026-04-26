@@ -53,6 +53,7 @@ export class RabbitmqConsumer implements OnModuleInit, OnModuleDestroy {
           await this.ordersService.onQrReady(
             payload.orderId,
             payload.qrString,
+            payload.qrImageUrl,
             new Date(payload.expiresAt),
           );
 
