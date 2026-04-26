@@ -1,98 +1,200 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# order-service
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Manages the full order lifecycle — from cart management through checkout, stock coordination (via RabbitMQ), to completed/cancelled orders.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+**Tech:** NestJS · TypeScript · PostgreSQL · TypeORM · RabbitMQ
 
-## Description
+**Internal port:** `3003`
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+---
 
-## Project setup
+## Order Lifecycle
 
-```bash
-$ npm install
+```
+CART
+  │
+  │ POST /orders/cart/checkout
+  ▼
+PENDING ──── order.created ────▶ RabbitMQ ────▶ product-service (reserve stock)
+  │                                                     │
+  │                               ┌────────────────────┤
+  │                               ▼                    ▼
+  │                        stock.reserved         stock.failed
+  │                               │                    │
+  ▼                               ▼                    ▼
+PENDING ───── awaiting.payment ──▶ payment-service  CANCELLED
+  │
+  │ (Midtrans webhook)
+  ▼
+COMPLETED
 ```
 
-## Compile and run the project
+---
 
-```bash
-# development
-$ npm run start
+## API Endpoints
 
-# watch mode
-$ npm run start:dev
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/orders/cart` | JWT | Get current user's active cart |
+| POST | `/orders/cart/items` | JWT | Add item to cart |
+| PATCH | `/orders/cart/items/:skuId` | JWT | Update item quantity in cart |
+| DELETE | `/orders/cart/items/:skuId` | JWT | Remove item from cart |
+| DELETE | `/orders/cart` | JWT | Clear entire cart |
+| POST | `/orders/cart/checkout` | JWT (Gateway) | Checkout cart — locks prices, begins stock reservation |
+| GET | `/orders/user/me` | JWT | Get all orders for current user |
+| GET | `/orders/:id` | JWT | Get order detail with line items |
+| GET | `/orders` | JWT (Admin) | Get all orders |
 
-# production mode
-$ npm run start:prod
+> All endpoints are exposed via the API gateway at `/api/order/*`
+
+---
+
+## RabbitMQ Events
+
+| Direction | Event | Trigger | Action |
+|---|---|---|---|
+| Publishes | `order.created` | Checkout completed | Sends order items to product-service for stock reservation |
+| Publishes | `order.awaiting.payment` | Stock reserved | Sends order details to payment-service to create QRIS charge |
+| Consumes | `order.stock.reserved` | Product-service confirms stock | Updates order status → PENDING |
+| Consumes | `order.stock.failed` | Product-service reports shortage | Updates order status → CANCELLED |
+
+---
+
+## System Flow
+
+### POST /orders/cart/items — Add to Cart
+
+```
+Client (User JWT)
+  │
+  ▼
+[ order-service ]
+  │
+  ├── Find existing CART order for user (or create one)
+  ├── Check if SKU already in cart
+  │     ├── Yes → increment quantity
+  │     └── No  → add new order item
+  └── Return updated cart
 ```
 
-## Run tests
+### POST /orders/cart/checkout — Checkout
 
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+```
+[ API Gateway ] (validates SKUs + locks prices first)
+  │
+  ▼
+[ order-service ] POST /orders/cart/checkout
+  │
+  ├── Receive cart items with locked prices from gateway
+  ├── Calculate totalAmount
+  ├── Update order status: CART → PENDING
+  ├── Save locked prices on each order item
+  └── Publish → order.created (order ID + items + quantities)
 ```
 
-## Deployment
+### Consume order.stock.reserved
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+```
+[ RabbitMQ ] ──── order.stock.reserved ────▶ [ order-service ]
+                                                    │
+                                                    ├── Update order status → PENDING
+                                                    └── Publish → order.awaiting.payment
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### Consume order.stock.failed
 
-## Resources
+```
+[ RabbitMQ ] ──── order.stock.failed ────▶ [ order-service ]
+                                                  │
+                                                  └── Update order status → CANCELLED
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+---
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+## Project Structure
 
-## Support
+```
+order-service/
+└── src/
+    ├── orders/
+    │   ├── entities/order.entity.ts      # Order (userId, status, totalAmount)
+    │   ├── orders.controller.ts          # Cart and order endpoints
+    │   ├── orders.service.ts             # Cart management + checkout logic
+    │   ├── repositories/orders.repository.ts
+    │   └── events/                       # Event payload types
+    │       ├── order-created.event.ts
+    │       ├── order-awaiting-payment.event.ts
+    │       ├── order-stock-reserved.event.ts
+    │       └── order-stock-failed.event.ts
+    ├── order-items/
+    │   ├── entities/order-item.entity.ts # OrderItem (skuId, quantity, price)
+    │   ├── order-items.service.ts
+    │   └── repositories/
+    └── rabbitmq/
+        ├── rabbitmq.consumer.ts          # Consumes stock.reserved / stock.failed
+        └── rabbitmq.service.ts           # Publishes order.created / awaiting.payment
+```
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+---
 
-## Stay in touch
+## Environment Variables
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+```env
+PORT=3003
 
-## License
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASS=postgres
+DB_NAME=microserv_db
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+RABBITMQ_URL=amqp://guest:guest@localhost:5672
+
+JWT_SECRET=your_jwt_secret
+```
+
+---
+
+## Running Locally
+
+```bash
+npm install
+npm run start:dev
+```
+
+Service runs on `http://localhost:3003`.
+
+## Example Requests
+
+### Get Cart
+```bash
+curl http://localhost:3003/orders/cart \
+  -H "x-user-id: <user_uuid>"
+```
+
+### Add to Cart
+```bash
+curl -X POST http://localhost:3003/orders/cart/items \
+  -H "Content-Type: application/json" \
+  -H "x-user-id: <user_uuid>" \
+  -d '{"skuId": "<sku_uuid>", "quantity": 2}'
+```
+
+### Get My Orders
+```bash
+curl http://localhost:3003/orders/user/me \
+  -H "x-user-id: <user_uuid>"
+```
+
+> Note: In local dev, user identity is passed via `x-user-id` header (set by the gateway after JWT validation).
+
+## Docker
+
+```bash
+docker build -t order-service .
+docker run --env-file .env -p 3003:3003 order-service
+```
+
+## Part of
+
+[E-Commerce Microservices Platform](../README.md)
