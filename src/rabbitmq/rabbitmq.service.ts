@@ -41,7 +41,7 @@ export class RabbitmqService implements OnModuleInit, OnModuleDestroy {
       'orders.event',
     );
     const payload = Buffer.from(JSON.stringify(data));
-    this.channel.publish(exchange, routingKey, payload);
+    this.channel.publish(exchange, routingKey, payload, { persistent: true });
     this.logger.log(`[RabbitMQ] published ${routingKey}`);
   }
 
