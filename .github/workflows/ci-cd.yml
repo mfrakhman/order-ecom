@@ -40,4 +40,4 @@ jobs:
           script: |
             cd ${{ secrets.SERVER_DEPLOY_PATH }}
             docker compose pull order-service
-            docker compose up -d --no-build order-service
+            docker compose up -d --force-recreate --no-build order-service
