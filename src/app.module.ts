@@ -20,6 +20,7 @@ import { RabbitmqModule } from './rabbitmq/rabbitmq.module';
         username: configService.get<string>('DB_USER'),
         password: configService.get<string>('DB_PASS'),
         database: configService.get<string>('DB_NAME'),
+        ssl: configService.get('DB_SSL') === 'true' ? { rejectUnauthorized: false } : false,
         autoLoadEntities: true,
         synchronize: true,
       }),
