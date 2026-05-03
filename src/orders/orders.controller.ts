@@ -55,9 +55,10 @@ export class OrdersController {
   @Post('cart/checkout')
   async checkout(
     @Headers('x-user-id') userId: string,
+    @Headers('x-user-email') userEmail: string,
     @Body() body: { prices: Record<string, number> },
   ) {
-    return this.ordersService.checkout(userId, body.prices);
+    return this.ordersService.checkout(userId, body.prices, userEmail);
   }
 
   @Get(':id')
@@ -69,7 +70,8 @@ export class OrdersController {
   async createOrder(
     @Body() dto: CreateOrderDto,
     @Headers('x-user-id') userId: string,
+    @Headers('x-user-email') userEmail: string,
   ) {
-    return this.ordersService.createOrder(dto, userId);
+    return this.ordersService.createOrder(dto, userId, userEmail);
   }
 }

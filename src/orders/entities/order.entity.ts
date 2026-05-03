@@ -29,6 +29,9 @@ export class Order {
   @Column()
   userId!: string;
 
+  @Column({ type: 'varchar', nullable: true, default: null })
+  userEmail!: string | null;
+
   @Column({ type: 'enum', enum: OrderStatus, default: OrderStatus.PENDING })
   status!: OrderStatus;
 

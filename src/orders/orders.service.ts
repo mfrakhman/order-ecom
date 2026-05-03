@@ -6,6 +6,8 @@ import { Order, OrderStatus, PaymentStatus } from './entities/order.entity';
 import { OrderItem } from 'src/order-items/entities/order-item.entity';
 import { OrderCreatedEvent } from './events/order-created.event';
 import { OrderAwaitingPaymentEvent } from './events/order-awaiting-payment.event';
+import { NotificationOrderConfirmedEvent } from './events/notification-order-confirmed.event';
+import { NotificationOrderAwaitingPaymentEvent } from './events/notification-order-awaiting-payment.event';
 import { RabbitmqService } from '../rabbitmq/rabbitmq.service';
 
 @Injectable()
@@ -18,10 +20,11 @@ export class OrdersService {
     private readonly rabbitmqService: RabbitmqService,
   ) {}
 
-  async createOrder(dto: CreateOrderDto, userId: string) {
+  async createOrder(dto: CreateOrderDto, userId: string, userEmail?: string) {
     return this.dataSource.transaction(async (manager) => {
       const order = this.ordersRepository.createOrder({
         userId,
+        userEmail: userEmail ?? null,
         status: OrderStatus.PENDING,
         items: dto.items.map((item) => ({
           skuId: item.skuId,
@@ -88,11 +91,36 @@ export class OrdersService {
   async onQrReady(orderId: string, qrString: string, qrImageUrl: string, expiresAt: Date) {
     await this.ordersRepository.setQrData(orderId, qrString, qrImageUrl, expiresAt);
     this.logger.log(`[payment.qr_ready] QR stored for orderId=${orderId}`);
+    const order = await this.ordersRepository.findById(orderId);
+    if (order?.userEmail) {
+      const amount = order.items.reduce((sum, item) => sum + (item.price ?? 0) * item.quantity, 0);
+      const event = new NotificationOrderAwaitingPaymentEvent(
+        orderId,
+        order.userEmail,
+        amount,
+        order.items.map(item => ({ skuId: item.skuId, quantity: item.quantity, price: item.price ?? 0 })),
+      );
+      await this.rabbitmqService.publish('notification.order_awaiting_payment', event);
+      this.logger.log(`[notification.order_awaiting_payment] published orderId=${orderId}`);
+    }
   }
 
   async onPaymentConfirmed(orderId: string) {
+    const order = await this.ordersRepository.findById(orderId);
     await this.ordersRepository.markAsCompleted(orderId);
     this.logger.log(`[payment.confirmed] orderId=${orderId} marked COMPLETED`);
+    if (order && order.userEmail) {
+      const amount = order.items.reduce((sum, item) => sum + (item.price ?? 0) * item.quantity, 0);
+      const event = new NotificationOrderConfirmedEvent(
+        orderId,
+        order.userId,
+        order.userEmail,
+        amount,
+        order.items.map(item => ({ skuId: item.skuId, quantity: item.quantity, price: item.price ?? 0 })),
+      );
+      await this.rabbitmqService.publish('notification.order_confirmed', event);
+      this.logger.log(`[notification.order_confirmed] published orderId=${orderId}`);
+    }
   }
 
   async onPaymentExpired(orderId: string) {
@@ -160,7 +188,7 @@ export class OrdersService {
     }
   }
 
-  async checkout(userId: string, prices: Record<string, number>): Promise<Order> {
+  async checkout(userId: string, prices: Record<string, number>, userEmail?: string): Promise<Order> {
     const cart = await this.getCart(userId);
     if (cart.items.length === 0) throw new BadRequestException('Cart is empty');
     const itemRepo = this.dataSource.getRepository(OrderItem);
@@ -170,6 +198,7 @@ export class OrdersService {
       await itemRepo.update(item.id, { price });
     }
     await this.ordersRepository.updateStatus(cart.id, OrderStatus.PENDING);
+    if (userEmail) await this.ordersRepository.setUserEmail(cart.id, userEmail);
     const order = (await this.ordersRepository.findById(cart.id))!;
     const event = new OrderCreatedEvent(
       order.id,
