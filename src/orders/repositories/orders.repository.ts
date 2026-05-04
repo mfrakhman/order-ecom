@@ -78,6 +78,10 @@ export class OrdersRepository {
     await this.ordersRepository.update(id, { userEmail });
   }
 
+  async setDeliveryAddress(id: string, deliveryAddress: Record<string, any>): Promise<void> {
+    await this.ordersRepository.update(id, { deliveryAddress });
+  }
+
   async setQrData(id: string, qrString: string, qrImageUrl: string, qrExpiresAt: Date): Promise<void> {
     await this.ordersRepository.update(id, { qrString, qrImageUrl, qrExpiresAt, paymentStatus: PaymentStatus.AWAITING });
   }

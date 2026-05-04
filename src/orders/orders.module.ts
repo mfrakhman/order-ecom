@@ -6,9 +6,10 @@ import { Order } from './entities/order.entity';
 import { OrdersRepository } from './repositories/orders.repository';
 import { RabbitmqModule } from 'src/rabbitmq/rabbitmq.module';
 import { RabbitmqConsumer } from 'src/rabbitmq/rabbitmq.consumer';
+import { WishlistModule } from 'src/wishlist/wishlist.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Order]), RabbitmqModule],
+  imports: [TypeOrmModule.forFeature([Order]), RabbitmqModule, WishlistModule],
   providers: [OrdersService, OrdersRepository, RabbitmqConsumer],
   controllers: [OrdersController],
 })

@@ -47,6 +47,9 @@ export class Order {
   @Column({ type: 'timestamp', nullable: true, default: null })
   qrExpiresAt!: Date | null;
 
+  @Column({ type: 'jsonb', nullable: true, default: null })
+  deliveryAddress!: Record<string, any> | null;
+
   @OneToMany(() => OrderItem, (item) => item.order, { cascade: true })
   items!: OrderItem[];
 

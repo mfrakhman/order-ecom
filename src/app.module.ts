@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { OrdersModule } from './orders/orders.module';
 import { OrderItemsModule } from './order-items/order-items.module';
+import { WishlistModule } from './wishlist/wishlist.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RabbitmqModule } from './rabbitmq/rabbitmq.module';
@@ -27,6 +28,7 @@ import { RabbitmqModule } from './rabbitmq/rabbitmq.module';
     }),
     OrdersModule,
     OrderItemsModule,
+    WishlistModule,
     RabbitmqModule,
   ],
 })

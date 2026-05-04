@@ -56,9 +56,9 @@ export class OrdersController {
   async checkout(
     @Headers('x-user-id') userId: string,
     @Headers('x-user-email') userEmail: string,
-    @Body() body: { prices: Record<string, number> },
+    @Body() body: { prices: Record<string, number>; deliveryAddress?: Record<string, any> },
   ) {
-    return this.ordersService.checkout(userId, body.prices, userEmail);
+    return this.ordersService.checkout(userId, body.prices, userEmail, body.deliveryAddress);
   }
 
   @Get(':id')

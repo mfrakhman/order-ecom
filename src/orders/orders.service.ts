@@ -9,6 +9,7 @@ import { OrderAwaitingPaymentEvent } from './events/order-awaiting-payment.event
 import { NotificationOrderConfirmedEvent } from './events/notification-order-confirmed.event';
 import { NotificationOrderAwaitingPaymentEvent } from './events/notification-order-awaiting-payment.event';
 import { RabbitmqService } from '../rabbitmq/rabbitmq.service';
+import { WishlistService } from '../wishlist/wishlist.service';
 
 @Injectable()
 export class OrdersService {
@@ -18,6 +19,7 @@ export class OrdersService {
     private readonly ordersRepository: OrdersRepository,
     private dataSource: DataSource,
     private readonly rabbitmqService: RabbitmqService,
+    private readonly wishlistService: WishlistService,
   ) {}
 
   async createOrder(dto: CreateOrderDto, userId: string, userEmail?: string) {
@@ -188,7 +190,7 @@ export class OrdersService {
     }
   }
 
-  async checkout(userId: string, prices: Record<string, number>, userEmail?: string): Promise<Order> {
+  async checkout(userId: string, prices: Record<string, number>, userEmail?: string, deliveryAddress?: Record<string, any>): Promise<Order> {
     const cart = await this.getCart(userId);
     if (cart.items.length === 0) throw new BadRequestException('Cart is empty');
     const itemRepo = this.dataSource.getRepository(OrderItem);
@@ -199,12 +201,15 @@ export class OrdersService {
     }
     await this.ordersRepository.updateStatus(cart.id, OrderStatus.PENDING);
     if (userEmail) await this.ordersRepository.setUserEmail(cart.id, userEmail);
+    if (deliveryAddress) await this.ordersRepository.setDeliveryAddress(cart.id, deliveryAddress);
     const order = (await this.ordersRepository.findById(cart.id))!;
     const event = new OrderCreatedEvent(
       order.id,
       order.items.map(item => ({ skuId: item.skuId, quantity: item.quantity })),
     );
     await this.rabbitmqService.publish('order.created', event);
+    const skuIds = order.items.map(i => i.skuId);
+    this.wishlistService.convertItems(userId, skuIds, order.id).catch(() => {});
     return order;
   }
 }
